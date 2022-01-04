@@ -2,7 +2,7 @@ import argparse
 import math
 import random
 import os
-
+from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 import torch
 from torch import nn, autograd, optim
@@ -125,7 +125,8 @@ def set_grad_none(model, targets):
 
 def train(args, loader, generator, discriminator, g_optim, d_optim, g_ema, device):
     loader = sample_data(loader)
-
+    torch.backends.cudnn.benchmark = True
+    writer = SummaryWriter()
     pbar = range(args.iter)
 
     if get_rank() == 0:
@@ -190,7 +191,7 @@ def train(args, loader, generator, discriminator, g_optim, d_optim, g_ema, devic
         loss_dict["real_score"] = real_pred.mean()
         loss_dict["fake_score"] = fake_pred.mean()
 
-        discriminator.zero_grad()
+        discriminator.zero_grad(set_to_none=True)
         d_loss.backward()
         d_optim.step()
 
@@ -212,7 +213,7 @@ def train(args, loader, generator, discriminator, g_optim, d_optim, g_ema, devic
             real_pred = discriminator(real_img_aug)
             r1_loss = d_r1_loss(real_pred, real_img)
 
-            discriminator.zero_grad()
+            discriminator.zero_grad(set_to_none=True)
             (args.r1 / 2 * r1_loss * args.d_reg_every + 0 * real_pred[0]).backward()
 
             d_optim.step()
@@ -233,7 +234,7 @@ def train(args, loader, generator, discriminator, g_optim, d_optim, g_ema, devic
 
         loss_dict["g"] = g_loss
 
-        generator.zero_grad()
+        generator.zero_grad(set_to_none=True)
         g_loss.backward()
         g_optim.step()
 
@@ -248,7 +249,7 @@ def train(args, loader, generator, discriminator, g_optim, d_optim, g_ema, devic
                 fake_img, latents, mean_path_length
             )
 
-            generator.zero_grad()
+            generator.zero_grad(set_to_none=True)
             weighted_path_loss = args.path_regularize * args.g_reg_every * path_loss
 
             if args.path_batch_shrink:
@@ -301,7 +302,18 @@ def train(args, loader, generator, discriminator, g_optim, d_optim, g_ema, devic
                         "Path Length": path_length_val,
                     }
                 )
-
+            writer.add_scalars('values', {
+                        "Generator": g_loss_val,
+                        "Discriminator": d_loss_val,
+                        "Augment": ada_aug_p,
+                        "Rt": r_t_stat,
+                        "R1": r1_val,
+                        "Path Length Regularization": path_loss_val,
+                        "Mean Path Length": mean_path_length,
+                        "Real Score": real_score_val,
+                        "Fake Score": fake_score_val,
+                        "Path Length": path_length_val,
+                    }, i)
             if i % 100 == 0:
                 with torch.no_grad():
                     g_ema.eval()
@@ -313,6 +325,12 @@ def train(args, loader, generator, discriminator, g_optim, d_optim, g_ema, devic
                         normalize=True,
                         range=(-1, 1),
                     )
+                    writer.add_image('sample',utils.make_grid(sample,
+                        nrow=int((args.n_sample ** 0.5),
+                        normalize=True,
+                        range=(-1, 1))
+                        ),i)
+
 
             if i % 10000 == 0:
                 torch.save(
