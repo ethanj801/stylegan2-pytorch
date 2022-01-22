@@ -20,7 +20,7 @@ fused = load(
 
 class FusedLeakyReLUFunctionBackward(Function):
     @staticmethod
-    @torch.autocast(device_type ='cuda')
+    @torch.cuda.amp.custom_fwd(cast_inputs=torch.float32)
     def forward(ctx, grad_output, out, bias, negative_slope, scale):
         ctx.save_for_backward(out)
         ctx.negative_slope = negative_slope
@@ -63,7 +63,7 @@ class FusedLeakyReLUFunctionBackward(Function):
 
 class FusedLeakyReLUFunction(Function):
     @staticmethod
-    @torch.autocast(device_type ='cuda')
+    @torch.cuda.amp.custom_fwd(cast_inputs=torch.float32)
     def forward(ctx, input, bias, negative_slope, scale):
         empty = input.new_empty(0)
 
@@ -106,13 +106,12 @@ class FusedLeakyReLU(nn.Module):
 
         self.negative_slope = negative_slope
         self.scale = scale
-    @torch.autocast(device_type ='cuda')
+    @torch.cuda.amp.custom_fwd(cast_inputs=torch.float32)
     def forward(self, input):
         return fused_leaky_relu(input, self.bias, self.negative_slope, self.scale)
 
-@torch.autocast(device_type ='cuda')
 def fused_leaky_relu(input, bias=None, negative_slope=0.2, scale=2 ** 0.5):
-    
+
 
     if input.device.type == "cpu":
         if bias is not None:
