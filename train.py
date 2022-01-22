@@ -219,8 +219,9 @@ def train(args, loader, generator, discriminator, g_optim, d_optim, g_ema, devic
                 r1_loss = d_r1_loss(real_pred, real_img)
 
                 discriminator.zero_grad(set_to_none=True)
-            scalerD.scale(args.r1 / 2 * r1_loss * args.d_reg_every + 0 * real_pred[0]).backward()
-
+                val=args.r1 / 2 * r1_loss * args.d_reg_every + 0 * real_pred[0]
+            #scalerD.scale(args.r1 / 2 * r1_loss * args.d_reg_every + 0 * real_pred[0]).backward()
+            scalerD.scale(val).backward()
             scalerD.step(d_optim)
             scalerD.update()
         loss_dict["r1"] = r1_loss
