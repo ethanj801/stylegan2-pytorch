@@ -104,7 +104,7 @@ class FusedLeakyReLU(nn.Module):
 
         self.negative_slope = negative_slope
         self.scale = scale
-    @torch.autocast()
+    @torch.autocast(device_type ='cuda')
     def forward(self, input):
         return fused_leaky_relu(input, self.bias, self.negative_slope, self.scale)
 
