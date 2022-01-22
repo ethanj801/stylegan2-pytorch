@@ -4,7 +4,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 from torch.autograd import Function
-import torch.cuda.amp
+import torch.cuda.amp.autocast
 from torch.utils.cpp_extension import load
 
 
