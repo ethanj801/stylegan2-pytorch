@@ -208,7 +208,7 @@ def train(args, loader, generator, discriminator, g_optim, d_optim, g_ema, devic
 
         if d_regularize:
             real_img.requires_grad = True
-            with torch.autocast():
+            with torch.cuda.amp.autocast():
                 if args.augment:
                     real_img_aug, _ = augment(real_img, ada_aug_p)
 
