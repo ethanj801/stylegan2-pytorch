@@ -222,7 +222,7 @@ def train(args, loader, generator, discriminator, g_optim, d_optim, g_ema, devic
             scalerD.scale(args.r1 / 2 * r1_loss * args.d_reg_every + 0 * real_pred[0]).backward()
 
             scalerD.step(d_optim)
-
+            scalerD.update()
         loss_dict["r1"] = r1_loss
 
         requires_grad(generator, True)
@@ -242,7 +242,7 @@ def train(args, loader, generator, discriminator, g_optim, d_optim, g_ema, devic
 
         generator.zero_grad(set_to_none=True)
         scalerG.scale(g_loss).backward()
-        scalerG.step(g_optim)
+        scalerG.update()
 
         g_regularize = i % args.g_reg_every == 0
 
@@ -265,7 +265,7 @@ def train(args, loader, generator, discriminator, g_optim, d_optim, g_ema, devic
             scalerG.scale(weighted_path_loss).backward()
 
             scalerG.step(g_optim)
-
+            scalerG.update()
             mean_path_length_avg = (
                 reduce_sum(mean_path_length).item() / get_world_size()
             )
