@@ -157,6 +157,10 @@ def train(args, loader, generator, discriminator, g_optim, d_optim, g_ema, devic
         ada_augment = AdaptiveAugment(args.ada_target, args.ada_length, 8, device)
 
     sample_z = torch.randn(args.n_sample, args.latent, device=device)
+    ##
+    scalerD = torch.cuda.amp.GradScaler()
+    scalerG = torch.cuda.amp.GradScaler()
+    ##
 
     for idx in pbar:
         i = idx + args.start_iter
@@ -171,28 +175,29 @@ def train(args, loader, generator, discriminator, g_optim, d_optim, g_ema, devic
 
         requires_grad(generator, False)
         requires_grad(discriminator, True)
+        with torch.cuda.amp.autocast():
+            noise = mixing_noise(args.batch, args.latent, args.mixing, device)
+            fake_img, _ = generator(noise)
 
-        noise = mixing_noise(args.batch, args.latent, args.mixing, device)
-        fake_img, _ = generator(noise)
+            if args.augment:
+                real_img_aug, _ = augment(real_img, ada_aug_p)
+                fake_img, _ = augment(fake_img, ada_aug_p)
 
-        if args.augment:
-            real_img_aug, _ = augment(real_img, ada_aug_p)
-            fake_img, _ = augment(fake_img, ada_aug_p)
+            else:
+                real_img_aug = real_img
 
-        else:
-            real_img_aug = real_img
+            fake_pred = discriminator(fake_img)
+            real_pred = discriminator(real_img_aug)
+            d_loss = d_logistic_loss(real_pred, fake_pred)
 
-        fake_pred = discriminator(fake_img)
-        real_pred = discriminator(real_img_aug)
-        d_loss = d_logistic_loss(real_pred, fake_pred)
-
-        loss_dict["d"] = d_loss
+        loss_dict["d"] = scalerD.scale(d_loss)
         loss_dict["real_score"] = real_pred.mean()
         loss_dict["fake_score"] = fake_pred.mean()
 
         discriminator.zero_grad()
         d_loss.backward()
-        d_optim.step()
+        scalerD.step(d_optim)
+        scalerD.update()
 
         if args.augment and args.augment_p == 0:
             ada_aug_p = ada_augment.tune(real_pred)
@@ -202,61 +207,79 @@ def train(args, loader, generator, discriminator, g_optim, d_optim, g_ema, devic
 
         if d_regularize:
             real_img.requires_grad = True
+            with torch.cuda.amp.autocast():
+                if args.augment:
+                    real_img_aug, _ = augment(real_img, ada_aug_p)
 
-            if args.augment:
-                real_img_aug, _ = augment(real_img, ada_aug_p)
+                else:
+                    real_img_aug = real_img
 
-            else:
-                real_img_aug = real_img
+                real_pred = discriminator(real_img_aug)
+                r1_loss = d_r1_loss(real_pred, real_img)
 
-            real_pred = discriminator(real_img_aug)
-            r1_loss = d_r1_loss(real_pred, real_img)
-
+<<<<<<< Updated upstream
             discriminator.zero_grad()
             (args.r1 / 2 * r1_loss * args.d_reg_every + 0 * real_pred[0]).backward()
+=======
+                discriminator.zero_grad(set_to_none=True)
+            scalerD.scale(args.r1 / 2 * r1_loss * args.d_reg_every + 0 * real_pred[0]).backward()
+>>>>>>> Stashed changes
 
-            d_optim.step()
+            scalerD.step(d_optim)
 
         loss_dict["r1"] = r1_loss
 
         requires_grad(generator, True)
         requires_grad(discriminator, False)
+        with torch.cuda.amp.autocast():
 
-        noise = mixing_noise(args.batch, args.latent, args.mixing, device)
-        fake_img, _ = generator(noise)
+            noise = mixing_noise(args.batch, args.latent, args.mixing, device)
+            fake_img, _ = generator(noise)
 
-        if args.augment:
-            fake_img, _ = augment(fake_img, ada_aug_p)
+            if args.augment:
+                fake_img, _ = augment(fake_img, ada_aug_p)
 
-        fake_pred = discriminator(fake_img)
-        g_loss = g_nonsaturating_loss(fake_pred)
+            fake_pred = discriminator(fake_img)
+            g_loss = g_nonsaturating_loss(fake_pred)
 
         loss_dict["g"] = g_loss
 
+<<<<<<< Updated upstream
         generator.zero_grad()
         g_loss.backward()
         g_optim.step()
+=======
+        generator.zero_grad(set_to_none=True)
+        scalerG.scale(g_loss).backward()
+        scalerG.step(g_optim)
+>>>>>>> Stashed changes
 
         g_regularize = i % args.g_reg_every == 0
 
         if g_regularize:
-            path_batch_size = max(1, args.batch // args.path_batch_shrink)
-            noise = mixing_noise(path_batch_size, args.latent, args.mixing, device)
-            fake_img, latents = generator(noise, return_latents=True)
+            with torch.cuda.amp.autocast():
+                path_batch_size = max(1, args.batch // args.path_batch_shrink)
+                noise = mixing_noise(path_batch_size, args.latent, args.mixing, device)
+                fake_img, latents = generator(noise, return_latents=True)
 
-            path_loss, mean_path_length, path_lengths = g_path_regularize(
-                fake_img, latents, mean_path_length
-            )
+                path_loss, mean_path_length, path_lengths = g_path_regularize(
+                    fake_img, latents, mean_path_length
+                )
 
+<<<<<<< Updated upstream
             generator.zero_grad()
             weighted_path_loss = args.path_regularize * args.g_reg_every * path_loss
+=======
+                generator.zero_grad(set_to_none=True)
+                weighted_path_loss = args.path_regularize * args.g_reg_every * path_loss
+>>>>>>> Stashed changes
 
-            if args.path_batch_shrink:
-                weighted_path_loss += 0 * fake_img[0, 0, 0, 0]
+                if args.path_batch_shrink:
+                    weighted_path_loss += 0 * fake_img[0, 0, 0, 0]
 
-            weighted_path_loss.backward()
+            scalerG.scale(weighted_path_loss).backward()
 
-            g_optim.step()
+            scalerG.step(g_optim)
 
             mean_path_length_avg = (
                 reduce_sum(mean_path_length).item() / get_world_size()
@@ -269,13 +292,13 @@ def train(args, loader, generator, discriminator, g_optim, d_optim, g_ema, devic
 
         loss_reduced = reduce_loss_dict(loss_dict)
 
-        d_loss_val = loss_reduced["d"].mean().item()
-        g_loss_val = loss_reduced["g"].mean().item()
-        r1_val = loss_reduced["r1"].mean().item()
-        path_loss_val = loss_reduced["path"].mean().item()
-        real_score_val = loss_reduced["real_score"].mean().item()
-        fake_score_val = loss_reduced["fake_score"].mean().item()
-        path_length_val = loss_reduced["path_length"].mean().item()
+        d_loss_val = loss_reduced["d"].mean().detach()
+        g_loss_val = loss_reduced["g"].mean().detach()
+        r1_val = loss_reduced["r1"].mean().detach()
+        path_loss_val = loss_reduced["path"].mean().detach()
+        real_score_val = loss_reduced["real_score"].mean().detach()
+        fake_score_val = loss_reduced["fake_score"].mean().detach()
+        path_length_val = loss_reduced["path_length"].mean().detach()
 
         if get_rank() == 0:
             pbar.set_description(
