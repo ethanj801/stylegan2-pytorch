@@ -540,7 +540,7 @@ if __name__ == "__main__":
         dataset,
         batch_size=args.batch,
         sampler=data_sampler(dataset, shuffle=True, distributed=args.distributed),
-        drop_last=True,
+        drop_last=True, num_workers= 4, pin_memory=True
     )
 
     if get_rank() == 0 and wandb is not None and args.wandb:
