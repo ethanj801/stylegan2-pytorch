@@ -4,7 +4,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 from torch.autograd import Function
-import torch.cuda.amp.autocast
+import torch.cuda.amp
 from torch.utils.cpp_extension import load
 
 
@@ -92,7 +92,7 @@ class FusedLeakyReLUFunction(Function):
 
 
 class FusedLeakyReLU(nn.Module):
-    @autocast()
+    
     def __init__(self, channel, bias=True, negative_slope=0.2, scale=2 ** 0.5):
         super().__init__()
 
@@ -104,7 +104,7 @@ class FusedLeakyReLU(nn.Module):
 
         self.negative_slope = negative_slope
         self.scale = scale
-
+    @torch.autocast()
     def forward(self, input):
         return fused_leaky_relu(input, self.bias, self.negative_slope, self.scale)
 
