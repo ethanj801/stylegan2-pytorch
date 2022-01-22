@@ -242,6 +242,7 @@ def train(args, loader, generator, discriminator, g_optim, d_optim, g_ema, devic
 
         generator.zero_grad(set_to_none=True)
         scalerG.scale(g_loss).backward()
+        scalerG.step(g_optim)
         scalerG.update()
 
         g_regularize = i % args.g_reg_every == 0
