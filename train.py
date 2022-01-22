@@ -190,8 +190,8 @@ def train(args, loader, generator, discriminator, g_optim, d_optim, g_ema, devic
             fake_pred = discriminator(fake_img)
             real_pred = discriminator(real_img_aug)
             d_loss = d_logistic_loss(real_pred, fake_pred)
-
-        loss_dict["d"] = scalerD.scale(d_loss)
+        d_loss =scalerD.scale(d_loss)
+        loss_dict["d"] = d_loss
         loss_dict["real_score"] = real_pred.mean()
         loss_dict["fake_score"] = fake_pred.mean()
 
@@ -218,9 +218,11 @@ def train(args, loader, generator, discriminator, g_optim, d_optim, g_ema, devic
             r1_loss = d_r1_loss(real_pred, real_img)
 
             discriminator.zero_grad(set_to_none=True)
-            (args.r1 / 2 * r1_loss * args.d_reg_every + 0 * real_pred[0]).backward()
-            d_optim.step()
-            
+            val=args.r1 / 2 * r1_loss * args.d_reg_every + 0 * real_pred[0]
+            #(args.r1 / 2 * r1_loss * args.d_reg_every + 0 * real_pred[0]).backward()
+            scalerD.scale(val).backward()
+            scalerD.step(d_optim)
+            scalerD.update()
         loss_dict["r1"] = r1_loss
 
         requires_grad(generator, True)
